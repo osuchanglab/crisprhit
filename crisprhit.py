@@ -17,9 +17,9 @@ __version__ = '0.9.0'
 date = 'June 1, 2017'
 positions = {}
 positions['seed'] = range(1, 6) + [7, 8]
+positions['interference'] = [6, 12, 18, 24, 30]
 positions['priming'] = [28]
 positions['stable'] = [10, 11, 12, 18, 22, 24, 25, 29, 30, 31]
-positions['interference'] = [6, 12, 18, 24, 30]
 positions['guide'] = 'SSSSSISS XXY     Y   X YX  *XYX'
 # warnings.filterwarnings("error")
 
