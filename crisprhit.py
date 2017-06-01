@@ -18,9 +18,10 @@ date = 'June 1, 2017'
 positions = {}
 positions['seed'] = range(1, 6) + [7, 8]
 positions['interference'] = [6, 12, 18, 24, 30]
-positions['priming'] = [28]
-positions['stable'] = [10, 11, 12, 18, 22, 24, 25, 29, 30, 31]
-positions['guide'] = 'SSSSSISS XXY     Y   X YX  *XYX'
+# positions['priming'] = [28]
+# positions['stable'] = [10, 11, 12, 18, 22, 24, 25, 29, 30, 31]
+positions['guide'] = 'SSSSSISS'
+
 # warnings.filterwarnings("error")
 
 
@@ -116,7 +117,8 @@ def run_argparse():
             choices=['True', 'False', 'Partial'], default='False')
     parser.add_argument(
             '--filter', help='Filter output to a particular spacer category.',
-            choices=['all', 'perfect', 'hq', 'priming', 'partial', 'other'],
+            choices=['all', 'perfect', 'hq', 'priming', 'partial', 'other',
+                     'stable'],
             action='append', default=['all'])
     parser.add_argument(
             '--mmlimit', help='Set mismatch limit. (default = 15)', default=15,
@@ -215,7 +217,8 @@ def parse_opts(args, tags):
         msg = 'Setting plength to given PAM length.'
         args.logger.info(msg)
         args.plength = len(args.PAM)
-    positions['guide'] = 'P' * args.plength + positions['guide']
+    # positions['guide'] = 'P' * args.plength + positions['guide']
+    positions['guide'] = 'P' * args.plength
     return(args, tags)
 
 
@@ -242,24 +245,43 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
     # Need to reverse sequences for basepairing
     rspacer = spacer[::-1]
     rpspacer = pspacer[::-1]
+    scoring = defaultdict(list)
+    guide = positions['guide']
+    for i, base in enumerate(rspacer):
+        pos = i + 1
+        if pos in positions['seed']:
+            scoring['seed'].append(pos)
+            guide += 'S'
+        elif pos in positions['interference']:
+            scoring['interference'].append(pos)
+            guide += 'I'
+        elif base == 'C' or rpspacer[i] == 'G':
+            scoring['stable'].append(pos)
+            guide += 'X'
+        elif base == 'G' or rpspacer[i] == 'C':
+            scoring['priming'].append(pos)
+            guide += '*'
+        else:
+            guide += ' '
+
     for i, c in enumerate(rspacer):
         pos = i + 1
         try:
             if c == str(rpspacer[i]):
                 matchstick += '|'
                 hit += 1
-                if pos in positions['seed']:
+                if pos in scoring['seed']:
                     seedhit += 1
             else:
                 matchstick += ' '
                 mm['total'] += 1
-                if pos in positions['interference']:
+                if pos in scoring['interference']:
                     mm['hq'] += 1
-                if pos in positions['seed']:
+                if pos in scoring['seed']:
                     mm['seed'] += 1
-                if pos in positions['priming']:
+                if pos in scoring['priming']:
                     mm['priming'] += 1
-                if pos in positions['stable']:
+                if pos in scoring['stable']:
                     mm['stable'] += 1
         except IndexError:
             msg = 'Length of sequence ({}) does not match spacer ({})'
@@ -268,14 +290,14 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
     quality = 'other'
     if not mm['total']:
         quality = 'perfect'
-    elif mm['hq'] <= 2 and mm['seed'] == 0 and mm['pam'] == 0 and \
-            mm['priming'] == 0 and mm['total'] <= 3:
+    elif mm['hq'] <= 3 and mm['seed'] == 0 and mm['pam'] == 0 and \
+            mm['priming'] <= 2 and mm['total'] <= 3:
         quality = 'hq'
-    elif mm['stable'] <= 1 and mm['total'] <= 8 and mm['priming'] == 1:
+    elif mm['stable'] <= 1 and mm['total'] <= 8 and mm['priming'] >= 2:
         quality = 'priming'
     elif mm['stable'] <= 2 and mm['pam'] <= 1 and mm['total'] <= 7:
         quality = 'priming'
-    elif mm['stable'] >= 3:
+    elif mm['stable'] > 3:
         quality = 'stable'
     elif mm['seed'] <= 1 and mm['pam'] <= 1:
         quality = 'partial'
@@ -283,7 +305,8 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
         quality = 'partial'
     elif mm['seed'] == 0:
         quality = 'partial'
-    return(hit, mm['total'], seedhit, mm['priming'], quality, matchstick)
+    return(hit, mm['total'], seedhit, mm['priming'], quality, matchstick,
+           guide)
 
 
 def parse_contigs(args, tags, spacers):
@@ -378,8 +401,8 @@ def parse_contigs(args, tags, spacers):
                 if slen != len(seq):
                     fill = 'N' * (slen - len(seq))
                     seq = fill + seq
-                hits, mismatches, seedhits, primingmm, qual, matchstick = \
-                    compare_spacer(args, spacer, seq, PAMhits)
+                hits, mismatches, seedhits, primingmm, qual, matchstick, guide\
+                    = compare_spacer(args, spacer, seq, PAMhits)
                 if mismatches > args.mmlimit:
                     msg = 'Skipping {} hit {} due to hitting mismatch limit.'
                     args.logger.debug(msg.format(record.id, k))
@@ -400,6 +423,7 @@ def parse_contigs(args, tags, spacers):
                 outline['primingmm'] = primingmm
                 outline['matchstick'] = matchstick
                 outline['quality'] = qual
+                outline['guide'] = guide
                 outline['name'] = prefix + str(ps).zfill(5)
                 PAMn = list(str(PAM))
                 if args.PAM.find('N') > -1:
@@ -471,7 +495,8 @@ def print_output(args, output, spacers):
             out = [line['name'], line['id'], line['start'] + ':' + line['end'],
                    line['strand'], line['spacer'], line['quality']]
             print('#' + ' '.join(map(str, out)))
-            out = positions['guide']
+            # out = positions['guide']
+            out = line['guide']
             print(' ' * lfill + out)
             print(' ' * (lfill + args.plength) + spacers[line['spacer']][0])
             seq = line['seq']
@@ -487,10 +512,12 @@ def compare_PAM(args, pamcheck):
     PAMscores = []
     top10 = []
     for pamseq in pamcheck:
+        if pamseq == 'total':
+            continue
         score = (pamcheck[pamseq]['hits']/pamcheck[pamseq]['matches']) * \
                 (pamcheck[pamseq]['matches']/pamcheck['total']['matches'])
         PAMscores.append((pamseq, score))
-    top10 = sorted(PAMscores, key=lambda x: x[1], reverse=True)[1:11]
+    top10 = sorted(PAMscores, key=lambda x: x[1], reverse=True)[0:10]
     matched = 0
     for i, v in enumerate(top10):
         args.logger.debug('gPAM={}\tePAM={}'.format(givenpam, v[0]))
