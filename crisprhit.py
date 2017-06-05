@@ -19,7 +19,7 @@ positions = {}
 positions['seed'] = range(1, 6) + [7, 8]
 positions['interference'] = [6, 12, 18, 24, 30]
 # positions['priming'] = [28]
-# positions['stable'] = [10, 11, 12, 18, 22, 24, 25, 29, 30, 31]
+# positions['stable'] = [29, 30, 31]
 positions['guide'] = 'SSSSSISS'
 
 # warnings.filterwarnings("error")
@@ -116,9 +116,13 @@ def run_argparse():
             '--match', help='Force PAM match. (default = False)',
             choices=['True', 'False', 'Partial'], default='False')
     parser.add_argument(
-            '--filter', help='Filter output to a particular spacer category.',
+            '--spacers', help='Limit output to a particular spacer category.',
             choices=['all', 'perfect', 'hq', 'priming', 'partial', 'other',
                      'stable'],
+            action='append', default=['all'])
+    parser.add_argument(
+            '--filters', help='Change spacer filters to control quality.',
+            choices=['all', 'pre', 'first', 'second', 'third', 'post'],
             action='append', default=['all'])
     parser.add_argument(
             '--mmlimit', help='Set mismatch limit. (default = 15)', default=15,
@@ -146,8 +150,10 @@ def run_argparse():
     args.logger = init_logger(args)
     args.base = os.path.basename(args.infile)
     args.warning = 0
-    if len(args.filter) > 1 and 'all' in args.filter:
-        args.filter.remove('all')
+    if len(args.spacers) > 1 and 'all' in args.spacers:
+        args.spacers.remove('all')
+    if len(args.filters) > 1 and 'all' in args.filters:
+        args.filters.remove('all')
     return args
 
 
@@ -218,7 +224,7 @@ def parse_opts(args, tags):
         args.logger.info(msg)
         args.plength = len(args.PAM)
     # positions['guide'] = 'P' * args.plength + positions['guide']
-    positions['guide'] = 'P' * args.plength
+    positions['guide'] = '*' * args.plength
     return(args, tags)
 
 
@@ -230,6 +236,115 @@ def parse_spacers(args):
     for record in fasta:
         spacers[record.id] = (record.seq, record.reverse_complement().seq)
     return spacers
+
+
+def prefilter(quality, mm):
+    if not mm['total']:
+        quality = 'perfect'
+    elif mm['total'] <= 3 and mm['pam'] == 0 and mm['seed'] == 0 and \
+            mm['hq'] > 0:
+        quality = 'hq'
+    elif mm['total'] == 3 and mm['pam'] == 0 and mm['seed'] <= 1 and \
+            mm['hq'] > 1:
+        quality = 'hq'
+    elif mm['total'] > 3 and mm['stable'] == 0:
+        quality = 'priming'
+    elif mm['total'] > 3 and mm['priming'] > mm['stable'] + 1:
+        quality = 'priming'
+    elif mm['total'] > 4 and mm['stable'] <= 1:
+        quality = 'priming'
+    elif mm['stable'] > mm['priming'] + 3:
+        quality = 'stable'
+    return quality
+
+
+def firstpass(quality, mm):
+    if mm['total'] == 1:
+        quality = 'hq'
+    elif mm['total'] == 2:
+        if mm['seed'] == 0:
+            if mm['pam'] == 0 or mm['stable'] > 0:
+                quality = 'hq'
+            else:
+                quality = 'hq_priming'
+        else:
+            quality = 'hq_priming'
+    elif mm['total'] == 3:
+        if mm['seed'] == 0:
+            if mm['pam'] == 0:
+                if mm['hq'] > 0:
+                    quality = 'hq'
+                else:
+                    if mm['stable'] == 0:
+                        quality = 'hq_priming'
+        else:
+            if mm['stable'] == 0 and mm['hq'] == 0:
+                quality = 'priming'
+            else:
+                if mm['pam'] > 0:
+                    quality = 'priming'
+    if mm['total'] <= 3:
+        if quality == 'other':
+            if mm['priming'] > mm['stable']:
+                quality = 'priming'
+    return quality
+
+
+def secondpass(quality, mm):
+    # Checked total == 4
+    if mm['total'] == 4:
+        if mm['seed'] == 0:
+            if mm['pam'] == 0:
+                if mm['hq'] >= 2:
+                    quality = 'hq'
+                elif mm['stable'] == 0:
+                    quality = 'priming'
+                elif mm['hq'] < 2 and mm['priming'] > 2:
+                    quality = 'priming'
+                else:
+                    quality = 'other'
+            else:
+                if mm['priming'] > 1:
+                    quality = 'priming'
+                else:
+                    quality = 'other'
+        elif mm['stable'] == 1 and mm['priming'] == 0:
+            quality = 'priming'
+    # Checking
+    elif mm['total'] == 5:
+        if mm['priming'] > 1 and mm['stable'] <= 1:
+            quality = 'priming'
+        elif mm['stable'] > 3:
+            quality = 'stable'
+        else:
+            quality = 'other'
+    elif mm['total'] == 6:
+        if mm['priming'] > 0 and mm['stable'] <= 1:
+            quality = 'priming'
+        elif mm['priming'] > 2 and mm['stable'] <= 2:
+            quality = 'priming'
+        else:
+            if mm['stable'] > 3:
+                quality = 'stable'
+    return quality
+
+
+def thirdpass(quality, mm):
+    if mm['total'] > 6:
+        if mm['stable'] < 2:
+            quality = 'priming'
+        else:
+            if mm['stable'] > 3 and mm['priming'] < 2:
+                quality = 'stable'
+    return quality
+
+def postfilter(quality, mm):
+    if mm['stable'] > mm['priming'] + 2:
+        quality = 'stable'
+    if mm['total'] > 3:
+        if mm['stable'] <= 1 and mm['priming'] > 0:
+            quality = 'priming'
+    return quality
 
 
 def compare_spacer(args, spacer, pspacer, PAMhits):
@@ -246,23 +361,6 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
     rspacer = spacer[::-1].upper()
     rpspacer = pspacer[::-1].upper()
     guide = positions['guide']
-    # scoring = defaultdict(list)
-    # for i, base in enumerate(rspacer):
-    #     pos = i + 1
-    #     if pos in positions['seed']:
-    #         scoring['seed'].append(pos)
-    #         guide += 'S'
-    #     elif pos in positions['interference']:
-    #         scoring['interference'].append(pos)
-    #         guide += 'I'
-    #     elif base == 'C' or rpspacer[i] == 'G':
-    #         scoring['stable'].append(pos)
-    #         guide += 'X'
-    #     elif base == 'G' or rpspacer[i] == 'C':
-    #         scoring['priming'].append(pos)
-    #         guide += '*'
-    #     else:
-    #         guide += ' '
 
     for i, c in enumerate(rspacer):
         pos = i + 1
@@ -286,9 +384,9 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
                     intf = True
                 if pos in positions['seed']:
                     mm['seed'] += 1
-                    guide += 'S'
-                    if pos == 1:
-                        mm['stable'] += 1
+                    guide += 'T'
+                    # if pos == 1:
+                    #     mm['stable'] += 1
                 elif c == 'C' or rpspacer[i] == 'G':
                     mm['stable'] += 1
                     if intf:
@@ -308,37 +406,68 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
             args.logger.critical(msg.format(len(pspacer), len(spacer)))
             sys.exit()
     quality = 'other'
-    if not mm['total']:
-        quality = 'perfect'
-    elif mm['hq'] <= 4 and mm['seed'] == 0 and mm['pam'] == 0 and \
-            mm['priming'] <= 1 and mm['stable'] <= 2 and mm['total'] <= 4:
-        quality = 'hq'
-    elif mm['hq'] <= 1 and mm['seed'] <= 1 and mm['pam'] == 0 and \
-            mm['priming'] <= 1 and mm['stable'] <= 1 and mm['total'] <= 2:
-        quality = 'hq'
-    elif mm['seed'] == 0 and mm['pam'] == 0 and mm['stable'] == 3 and \
-            mm['total'] == 3 and mm['hq'] > 0:
-        quality = 'hq'
-    elif mm['seed'] > 0 and mm['priming'] > 0 and mm['stable'] <= 2 and \
-            mm['total'] <= 8:
-        quality = 'priming'
-    elif mm['seed'] > 0 and mm['stable'] <= 2 and \
-            mm['total'] <= 4:
-        quality = 'priming'
-    elif mm['stable'] <= 2 and mm['total'] <= 8 and mm['priming'] >= 2:
-        quality = 'priming'
-    elif mm['stable'] == 0 and mm['pam'] <= 1 and mm['total'] <= 8:
-        quality = 'priming'
-    elif mm['stable'] > 1:
-        quality = 'stable'
-    elif mm['seed'] <= 1 and mm['pam'] <= 1:
-        quality = 'partial'
-    elif mm['seed'] <= 2 and mm['pam'] == 0:
-        quality = 'partial'
-    elif mm['seed'] == 0:
-        quality = 'partial'
+    if 'all' in args.filters or 'pre' in args.filters:
+        quality = prefilter(quality, mm)
+
+    if quality == 'other':
+        if 'all' in args.filters or 'first' in args.filters:
+            quality = firstpass(quality, mm)
+    if quality == 'other':
+        if 'all' in args.filters or 'second' in args.filters:
+            quality = secondpass(quality, mm)
+    if quality == 'other':
+        if 'all' in args.filters or 'third' in args.filters:
+            quality = thirdpass(quality, mm)
+    if quality == 'other':
+        if 'all' in args.filters or 'post' in args.filters:
+            quality = postfilter(quality, mm)
+    #     # elif mm['total'] == 7 or mm['total'] == 8:
+    #     #     if mm['stable'] <= 2:
+    #     #         quality = 'priming'
+    #     #     elif mm['stable'] >= 5:
+    #     #         quality = 'stable'
+    #     #     else:
+    #     #         quality = 'other'
+    #     # elif mm['total'] == 9:
+    #     #     if mm['stable'] <= 2:
+    #     #         quality = 'priming'
+    #     #     elif mm['stable'] > 5:
+    #     #         quality = 'stable'
+    #     #     else:
+    #     #         quality = 'other'
+    #     # elif mm['total'] > 10:
+    #     #     quality = 'other'
+    # elif mm['total'] == 4:
+    #     pass
+    # elif mm['hq'] <= 4 and mm['seed'] == 0 and mm['pam'] == 0 and \
+    #         mm['priming'] <= 1 and mm['stable'] <= 2 and mm['total'] <= 4:
+    #     quality = 'hq'
+    # elif mm['hq'] <= 1 and mm['seed'] <= 1 and mm['pam'] == 0 and \
+    #         mm['priming'] <= 1 and mm['stable'] <= 1 and mm['total'] <= 2:
+    #     quality = 'hq'
+    # elif mm['seed'] == 0 and mm['pam'] == 0 and mm['stable'] == 3 and \
+    #         mm['total'] == 3 and mm['hq'] > 0:
+    #     quality = 'hq'
+    # elif mm['seed'] > 0 and mm['priming'] > 0 and mm['stable'] <= 2 and \
+    #         mm['total'] <= 8:
+    #     quality = 'priming'
+    # elif mm['seed'] > 0 and mm['stable'] <= 2 and \
+    #         mm['total'] <= 4:
+    #     quality = 'priming'
+    # elif mm['stable'] <= 2 and mm['total'] <= 8 and mm['priming'] >= 2:
+    #     quality = 'priming'
+    # elif mm['stable'] == 0 and mm['pam'] <= 1 and mm['total'] <= 8:
+    #     quality = 'priming'
+    # elif mm['stable'] > 1:
+    #     quality = 'stable'
+    # elif mm['seed'] <= 1 and mm['pam'] <= 1:
+    #     quality = 'partial'
+    # elif mm['seed'] <= 2 and mm['pam'] == 0:
+    #     quality = 'partial'
+    # elif mm['seed'] == 0:
+    #     quality = 'partial'
     return(hit, mm['total'], seedhit, mm['priming'], quality, matchstick,
-           guide, mm['stable'])
+           guide, mm['stable'], mm['hq'])
 
 
 def parse_contigs(args, tags, spacers, counts):
@@ -441,7 +570,7 @@ def parse_contigs(args, tags, spacers, counts):
                     fill = 'N' * (slen - len(seq))
                     seq = fill + seq
                 hits, mismatches, seedhits, primingmm, qual, matchstick, \
-                    guide, stablemm = compare_spacer(
+                    guide, stablemm, hqmm = compare_spacer(
                             args, spacer, seq, PAMhits)
                 if mismatches > args.mmlimit:
                     msg = 'Skipping {} hit {} due to hitting mismatch limit.'
@@ -462,6 +591,7 @@ def parse_contigs(args, tags, spacers, counts):
                 outline['seedhits'] = seedhits
                 outline['primingmm'] = primingmm
                 outline['stablemm'] = stablemm
+                outline['hqmm'] = hqmm
                 outline['matchstick'] = matchstick
                 outline['quality'] = qual
                 outline['guide'] = guide
@@ -493,10 +623,10 @@ def print_output(args, output, spacers, counts):
                   'priming_mm', 'stable_mm', 'quality', 'guide']
         print('\t'.join(header))
     for line in output:
-        if 'all' in args.filter:
+        if 'all' in args.spacers:
             pass
-        elif line['quality'] not in args.filter:
-            msg = 'Skipping {} due to quality filter'
+        elif line['quality'] not in args.spacers:
+            msg = 'Skipping {} due to spacer quality filter'
             args.logger.info(msg.format(line['name']))
             continue
         if args.outfmt == 'fasta':
@@ -528,7 +658,8 @@ def print_output(args, output, spacers, counts):
                    line['start'], line['end'], line['strand'],
                    line['spacer'], line['hits'], line['mismatches'],
                    line['PAMhits'], line['seedhits'], line['primingmm'],
-                   line['stablemm'], line['quality'], line['guide']]
+                   line['stablemm'], line['hqmm'], line['quality'],
+                   line['guide']]
             print('\t'.join(map(str, out)))
         elif args.outfmt == 'basepair':
             # ps = protospacer
