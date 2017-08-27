@@ -338,6 +338,7 @@ def thirdpass(quality, mm):
                 quality = 'stable'
     return quality
 
+
 def postfilter(quality, mm):
     if mm['stable'] > mm['priming'] + 2:
         quality = 'stable'
@@ -618,9 +619,10 @@ def print_output(args, output, spacers, counts):
     msg = 'Printing output of file {}.'
     args.logger.debug(msg.format(args.base))
     if args.outfmt == 'table':
-        header = ['#name', 'id', 'seq', 'PAM', 'start', 'end', 'strand',
-                  'spacer', 'hits', 'misses', 'PAM_hits', 'seed_hits',
-                  'priming_mm', 'stable_mm', 'quality', 'guide']
+        header = ['#name', 'id', 'proto_seq', 'spacer_seq', 'spacer_revcom',
+                  'PAM', 'start', 'end', 'strand', 'spacer', 'hits', 'misses',
+                  'PAM_hits', 'seed_hits', 'priming_mm', 'stable_mm', 'hq_mm',
+                  'quality', 'guide']
         print('\t'.join(header))
     for line in output:
         if 'all' in args.spacers:
@@ -654,8 +656,9 @@ def print_output(args, output, spacers, counts):
             else:
                 print(out)
         elif args.outfmt == 'table':
-            out = [line['name'], line['id'], line['seq'], line['PAM'],
-                   line['start'], line['end'], line['strand'],
+            out = [line['name'], line['id'], line['seq'],
+                   spacers[line['spacer']][0], spacers[line['spacer']][1],
+                   line['PAM'], line['start'], line['end'], line['strand'],
                    line['spacer'], line['hits'], line['mismatches'],
                    line['PAMhits'], line['seedhits'], line['primingmm'],
                    line['stablemm'], line['hqmm'], line['quality'],
