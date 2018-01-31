@@ -13,8 +13,8 @@ signal(SIGPIPE, SIG_DFL)
 signal(SIGINT, SIG_DFL)
 
 
-__version__ = '0.9.0'
-date = 'June 1, 2017'
+__version__ = '1.0.0'
+date = 'January 31, 2018'
 positions = {}
 positions['seed'] = range(1, 6) + [7, 8]
 positions['interference'] = [6, 12, 18, 24, 30]
@@ -422,51 +422,6 @@ def compare_spacer(args, spacer, pspacer, PAMhits):
     if quality == 'other':
         if 'all' in args.filters or 'post' in args.filters:
             quality = postfilter(quality, mm)
-    #     # elif mm['total'] == 7 or mm['total'] == 8:
-    #     #     if mm['stable'] <= 2:
-    #     #         quality = 'priming'
-    #     #     elif mm['stable'] >= 5:
-    #     #         quality = 'stable'
-    #     #     else:
-    #     #         quality = 'other'
-    #     # elif mm['total'] == 9:
-    #     #     if mm['stable'] <= 2:
-    #     #         quality = 'priming'
-    #     #     elif mm['stable'] > 5:
-    #     #         quality = 'stable'
-    #     #     else:
-    #     #         quality = 'other'
-    #     # elif mm['total'] > 10:
-    #     #     quality = 'other'
-    # elif mm['total'] == 4:
-    #     pass
-    # elif mm['hq'] <= 4 and mm['seed'] == 0 and mm['pam'] == 0 and \
-    #         mm['priming'] <= 1 and mm['stable'] <= 2 and mm['total'] <= 4:
-    #     quality = 'hq'
-    # elif mm['hq'] <= 1 and mm['seed'] <= 1 and mm['pam'] == 0 and \
-    #         mm['priming'] <= 1 and mm['stable'] <= 1 and mm['total'] <= 2:
-    #     quality = 'hq'
-    # elif mm['seed'] == 0 and mm['pam'] == 0 and mm['stable'] == 3 and \
-    #         mm['total'] == 3 and mm['hq'] > 0:
-    #     quality = 'hq'
-    # elif mm['seed'] > 0 and mm['priming'] > 0 and mm['stable'] <= 2 and \
-    #         mm['total'] <= 8:
-    #     quality = 'priming'
-    # elif mm['seed'] > 0 and mm['stable'] <= 2 and \
-    #         mm['total'] <= 4:
-    #     quality = 'priming'
-    # elif mm['stable'] <= 2 and mm['total'] <= 8 and mm['priming'] >= 2:
-    #     quality = 'priming'
-    # elif mm['stable'] == 0 and mm['pam'] <= 1 and mm['total'] <= 8:
-    #     quality = 'priming'
-    # elif mm['stable'] > 1:
-    #     quality = 'stable'
-    # elif mm['seed'] <= 1 and mm['pam'] <= 1:
-    #     quality = 'partial'
-    # elif mm['seed'] <= 2 and mm['pam'] == 0:
-    #     quality = 'partial'
-    # elif mm['seed'] == 0:
-    #     quality = 'partial'
     return(hit, mm['total'], seedhit, mm['priming'], quality, matchstick,
            guide, mm['stable'], mm['hq'])
 
