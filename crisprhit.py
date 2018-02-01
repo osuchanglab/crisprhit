@@ -593,11 +593,11 @@ def print_output(args, output, spacers, counts):
                       line['start'] + '_' + line['spacer']
             out += ' ' + 'hits:{} '.format(line['hits']) + \
                    'mismatch:{} '.format(line['mismatches']) + \
-                   'PAM_hits:{}'.format(line['PAMhits']) + \
-                   'seed_hits:{}'.format(line['seedhits']) + \
-                   'priming_mm:{}'.format(line['primingmm']) + \
-                   'stable_mm:{}'.format(line['stablemm']) + \
-                   'quality:{}'.format(line['quality'])
+                   'PAM_hits:{} '.format(line['PAMhits']) + \
+                   'seed_hits:{} '.format(line['seedhits']) + \
+                   'priming_mm:{} '.format(line['primingmm']) + \
+                   'stable_mm:{} '.format(line['stablemm']) + \
+                   'quality:{} '.format(line['quality'])
             print(out)
             if args.outtype == 'all':
                 out = line['seq'] + line['PAM']
