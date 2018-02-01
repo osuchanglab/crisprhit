@@ -104,9 +104,6 @@ def run_argparse():
                              '(default = fill).',
             choices=['full', 'seed', 'fill'], default='fill')
     parser.add_argument(
-            '--restrict', help='Restrict output length to this.', type=int,
-            default=0)
-    parser.add_argument(
             '--plength', help='PAM length to include. (default = 2)', type=int,
             default=2)
     parser.add_argument(
@@ -606,10 +603,7 @@ def print_output(args, output, spacers, counts):
                 out = line['seq'] + line['PAM']
             elif args.outtype == 'PAM':
                 out = line['PAM']
-            if args.restrict:
-                print(out[-args.restrict:])
-            else:
-                print(out)
+            print(out)
         elif args.outfmt == 'table':
             out = [line['name'], line['id'], line['seq'],
                    spacers[line['spacer']][0], spacers[line['spacer']][1],
