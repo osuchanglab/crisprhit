@@ -5,6 +5,7 @@ import argparse
 import csv
 import os.path
 import logging
+#import operator
 from collections import defaultdict
 from signal import signal, SIGPIPE, SIGINT, SIG_DFL
 signal(SIGPIPE, SIG_DFL)
@@ -58,31 +59,71 @@ def run_argparse():
 
 
 def parse_crisprhit(args):
-    spacers_revcom = []  # sequence of spacer_revcom for each entry
     data = {}  # dict with data about spacer
     positions = {}  # k = spacer_revcom; v = tuple of start, end pos
     red_spacers = defaultdict(list)
     with open(args.infile, 'rb') as tsv:
         reader = csv.DictReader(tsv, delimiter='\t')
-        for i, line in enumerate(reader):
+        for line in reader:
+            # print(line)
             s_revcom = line['spacer_revcom']
             red_spacers[s_revcom].append(line['spacer'])
-            if s_revcom not in spacers_revcom:
-                spacers_revcom.append(s_revcom)
+            if s_revcom not in data:
                 data[s_revcom] = line
-                positions[s_revcom] = (line['start'], line['end'])
-    return(spacers_revcom, data, positions, red_spacers)
+                positions[s_revcom] = (int(line['start']), int(line['end']))
+    return(data, positions, red_spacers, reader.fieldnames)
 
 
-def find_overlap(args, spacers_revcom, positions):
-    for i, seq in enumerate(spacers_revcom):
-        pos1 = positions[seq]
+def find_overlap(args, positions):
+    overlaps = []
+    grouplist = []
+    pos_sorted = sorted(positions.values())
+    refcoord = pos_sorted[0]
+    pos_sorted.remove(refcoord)
+    grouplist.append(refcoord)
+    for i, coord in enumerate(pos_sorted):
+        r = range(min(refcoord), max(refcoord))
+        if coord[0] in r or coord[1] in r:
+            if coord not in grouplist:
+                grouplist.append(coord)
+        else:
+            overlaps.append(grouplist)
+            grouplist = [coord]
+        if i == len(pos_sorted) - 1:
+            overlaps.append(grouplist)
+        refcoord = coord
+    ol_check = {}
+    for i, ol in enumerate(overlaps):
+        overlap = -1
+        if len(ol) > 1:
+            overlap = i
+        for coord in ol:
+            ol_check[coord] = overlap
+    return(ol_check)
+
+
+def print_overlap(args, data, ol_check, red_spacers, header):
+    output = []
+    for spacer in data:
+        coord = (int(data[spacer]['start']), int(data[spacer]['end']))
+        if ol_check[coord] > -1:
+            line = [ol_check[coord]] + \
+                    [data[spacer][x] for x in header]
+            output.append(line)
+    header = ['group'] + header
+    output.sort()
+    for line in output:
+        line[0] = 'group{}'.format(line[0])
+    writer = csv.writer(sys.stdout, delimiter='\t')
+    writer.writerow(header)
+    writer.writerows(output)
 
 
 def main():
     args = run_argparse()
-    spacers_revcom, data, positions, red_spacers = parse_crisprhit(args)
-    find_overlap(args, spacers_revcom, positions)
+    data, positions, red_spacers, header = parse_crisprhit(args)
+    ol_check = find_overlap(args, positions)
+    print_overlap(args, data, ol_check, red_spacers, header)
 
 
 if __name__ == '__main__':
