@@ -12,6 +12,10 @@ Required
 * [python v. 2.7.8+](https://www.python.org)
 * [Biopython v. 1.65+](http://biopython.org/DIST/docs/install/Installation.html#sec12)
 
+## Rules
+
+Rules for spacer-protospacer interactions were adapted from [Fineran et al. 2014](http://www.pnas.org/content/111/16/E1629.long).
+
 # Usage
 
 The purpose of this script is to identify the outcomes of spacer-protospacer interactions based on a BLAST search of the spacers to a target.
